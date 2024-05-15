@@ -1,11 +1,18 @@
-package main
+package goauth
+
+/*
+ * This file is to turn strings into unicode or html qr codes.
+ * Author: sophuwu <sophie@skisiel.com>
+ * Feel free to use this code in any way you want.
+ * Just call QR("string", header bool, html bool) to get a qr code.
+ * The header will display the string above the qr code.
+ */
 
 import (
 	"fmt"
 	"github.com/boombuler/barcode/qr"
 	"image"
 	"image/color"
-	"os"
 	"strings"
 )
 
@@ -101,7 +108,7 @@ func wrap(s string, w int) []string {
 	return lines
 }
 
-func encodeqr(s string, header bool, html bool) (string, error) {
+func QR(s string, header bool, html bool) (string, error) {
 	bar, err := qr.Encode(s, qr.L, qr.Auto)
 	if err != nil {
 		return "", err
@@ -125,8 +132,4 @@ func encodeqr(s string, header bool, html bool) (string, error) {
 	}
 	output += fmt.Sprintln(qrstr(bar, html))
 	return output, nil
-}
-
-func main() {
-	fmt.Println(encodeqr(strings.Join(os.Args[1:], " "), true, false))
 }
