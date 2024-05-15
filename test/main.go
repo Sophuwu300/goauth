@@ -74,15 +74,30 @@ func qrstr(img image.Image, html bool) string {
 	return b
 }
 
+func wrap(s string, w int) string {
+	var b string = ""
+	var i int = 0
+	for i = 0; i < len(s); i++ {
+		if i%w == 0 {
+			b += "\n"
+		}
+		b += string(s[i])
+	}
+	return b
+}
+
 func main() {
 	s := time.Now().String()
-	if len(os.Args) > 1 {
-		s = os.Args[1]
+	for _, v := range os.Args[1:] {
+		s += " " + v
 	}
-	bar, err := qr.Encode(s, qr.M, qr.Auto)
+
+	bar, err := qr.Encode(s, qr.L, qr.Auto)
 	if err != nil {
 		panic(err)
 	}
+	width := bar.Bounds().Size().X
+	// soft wrap at width if possible or hard wrap at width
 	fmt.Println(qrstr(bar, false))
-	fmt.Println(s)
+	fmt.Println(wrap(s, width))
 }
