@@ -3,55 +3,61 @@ package main
 import (
 	"fmt"
 	"github.com/boombuler/barcode/qr"
-	"github.com/pquerna/otp/totp"
+	"image"
 	"image/color"
+	_ "image/draw"
+	"os"
 	"strings"
 )
 
-const blank = " " // U+0020
-const upper = "▀" // U+2580
-const lower = "▄" // U+2584
-const whole = "█" // U+2588
+type utf8r rune
 
-var block []string = []string{blank, upper, lower, whole}
-
-func isNotBlack(c color.Color) int {
-	if c != color.Black && c != color.Transparent {
-		return 1
+func (u utf8r) String(html bool) string {
+	f := "%c"
+	if html {
+		f = "<td>&#x%x;</td>"
 	}
-	return 0
+	return fmt.Sprintf(f, u)
 }
 
-func qrline(s string) {
-	// fmt.Println("\033[97;40m" + s + "\033[0m")
-	fmt.Println(s)
+const blank rune = ' ' // U+0020
+const upper rune = '▀' // U+2580
+const lower rune = '▄' // U+2584
+const whole rune = '█' // U+2588
+var block = [4]rune{blank, upper, lower, whole}
+var bw = []color.Color{color.Black, color.White}
+var bwp = color.Palette(bw)
+
+func getblock(img image.Image, x int, y int) utf8r {
+	return utf8r(block[bwp.Index(img.At(x, y))+2*bwp.Index(img.At(x, y+1))])
+}
+
+func qrstr(img image.Image, html bool) string {
+	var b string = ""
+	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y+(img.Bounds().Dy()%2); y += 2 {
+		// b += block[3].String()
+		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+			b += getblock(img, x, y).String(html)
+		}
+		b += "\n"
+	}
+	if html {
+		b = "<tr>" + strings.ReplaceAll(b, "\n", "</tr><tr>")
+		b = strings.TrimSuffix(b, "<tr>")
+		b = `<table style="letter-spacing: -2px;line-height: 100%;border-spacing: 0;color: white;background-color: black;">` + b + "</table>"
+	}
+	return b
 }
 
 func main() {
-	key, err := totp.Generate(totp.GenerateOpts{AccountName: "soeiuhfiosuhfoiushgfusehfoushfuoseuhosfph", Issuer: "soph.local"})
+	s := "Hello, 世界"
+	if len(os.Args) > 1 {
+		s = os.Args[1]
+	}
+	bar, err := qr.Encode(s, qr.H, qr.Unicode)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(key.Secret())
-	fmt.Println(key.URL())
-	bar, err := qr.Encode(key.URL(), qr.L, qr.Unicode)
-	if err != nil {
-		panic(err)
-	}
-	qrline(strings.Repeat(lower, bar.Bounds().Dx()+2))
-	var s string
-	for y := bar.Bounds().Min.Y; y < bar.Bounds().Max.Y+(bar.Bounds().Dy()%2); y += 2 {
-		s = whole
-		for x := bar.Bounds().Min.X; x < bar.Bounds().Max.X; x++ {
-			s += block[isNotBlack(bar.At(x, y))+2*isNotBlack(bar.At(x, y+1))]
-			// s += fmt.Sprintf("\033[%d;%dm%s\033[0m", 30+67*isNotBlack(bar.At(x, y)), 40+67*isNotBlack(bar.At(x, y+1)), upperblock)
-		}
-		qrline(s + whole)
-	}
-	qrline(strings.Repeat(upper, bar.Bounds().Dx()+2))
-	// s, e := totp.GenerateCode("test", time.Now().UTC())
-	// if e != nil {
-	//	panic(e)
-	// }
-	// fmt.Println(s)
+	fmt.Println(qrstr(bar, false))
+	fmt.Println(qrstr(bar, true))
 }
