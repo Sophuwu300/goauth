@@ -22,7 +22,7 @@ func generate(user string) {
 func validate(key *otp.Key) {
 	// Now Validate that the user's successfully added the passcode.
 	fmt.Println("Validating TOTP...")
-	passcode := promptForPasscode()
+	passcode := "123456"
 	valid := totp.Validate(passcode, key.Secret())
 	if valid {
 		println("Valid passcode!")

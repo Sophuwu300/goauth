@@ -1,5 +1,6 @@
 package goauth
 
+/*
 import (
 	"crypto/subtle"
 	"net/http"
@@ -17,3 +18,4 @@ func HttpAuth(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+*/

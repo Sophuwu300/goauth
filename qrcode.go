@@ -9,10 +9,17 @@ package goauth
  */
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/boombuler/barcode/qr"
+	"github.com/disintegration/imaging"
+	"github.com/golang/freetype"
+	"github.com/hqbobo/text2pic"
 	"image"
 	"image/color"
+	"image/png"
+	"os"
+	"slices"
 	"strings"
 )
 
@@ -35,8 +42,10 @@ var bw = []color.Color{color.Black, color.White, color.White, color.White}
 var bwp = color.Palette(bw)
 
 func pad(n int, r ...rune) string {
-	if n <= 1 {
+	if n == 1 {
 		n += 1
+	} else if n < 1 {
+		n = 1
 	}
 	if len(r) == 0 {
 		return strings.Repeat(utf8r(whole).String(false), n)
@@ -84,52 +93,100 @@ func qrstr(img image.Image, html bool) string {
 	return b
 }
 
-func wrap(s string, w int) []string {
-	s = strings.Join(strings.Split(s, " "), "\n")
-	var b = strings.Split(s, "\n")
+func wrap(w int, s ...string) []string {
 	var line = ""
-	var lines []string
-	for i, v := range b {
-		if len(v) > w {
-			lines = append(lines, v[:w-1], v[w-1:])
-			continue
-		}
-		if len(line)+len(v) < w {
-			line += v + " "
-		}
-		if len(line)+len(v) >= w {
-			lines = append(lines, strings.TrimSuffix(line, " "))
-			line = ""
-		}
-		if i == len(b)-1 {
-			lines = append(lines, strings.TrimSuffix(line, " "))
-		}
-	}
-	return lines
-}
-
-func QR(s string, header bool, html bool) (string, error) {
-	bar, err := qr.Encode(s, qr.L, qr.Auto)
-	if err != nil {
-		return "", err
-	}
-	var output = ""
-	if header && !html {
-		width := bar.Bounds().Dx()
-		ar := wrap(s, width)
-		output += fmt.Sprintln(pad(0, whole) + pad(width+2, upper) + pad(0, whole))
-		for i, v := range ar {
-			v = pad((((width)-len(v)-1*2*(1-width%2))/2)-(width%2), blank) + v + pad((width-len(v)+2+2*(width%2))/2, blank)
-			v = pad(0) + pad(0, blank) + v + pad(0)
-			output += fmt.Sprintf("%s", v)
-			if i < len(ar) {
-				output += fmt.Sprintln()
+	var lines, b []string
+	for n := range s {
+		b = strings.Split(s[n], " ")
+		for i, v := range b {
+			if len(v) > w {
+				lines = append(lines, v[:w-1], v[w-1:])
+				continue
+			}
+			if len(line)+len(v) < w {
+				line += v + " "
+			} else {
+				lines = append(lines, strings.TrimSuffix(line, " "))
+				line = ""
+				continue
+			}
+			if i == len(b)-1 {
+				lines = append(lines, strings.TrimSuffix(line, " "))
+				line = ""
 			}
 		}
-		output += fmt.Sprintln(pad(0, whole) + pad(width+2, lower) + pad(0, whole))
-	} else if header && html {
-		output += fmt.Sprintf("<p>%s</p>", s)
 	}
-	output += fmt.Sprintln(qrstr(bar, html))
-	return output, nil
+	return slices.Clip(lines)
+}
+
+type QRcode struct {
+	Data    string
+	Headers []string
+	Code    image.Image
+}
+
+func GenQR(data string, header ...string) (QRcode, error) {
+	code, err := qr.Encode(data, qr.H, qr.Auto)
+	if err != nil {
+		return QRcode{}, err
+	}
+	return QRcode{
+		data,
+		header,
+		code,
+	}, nil
+}
+
+func (q QRcode) String() string {
+	var output = ""
+	ar := wrap(q.Code.Bounds().Dx(), q.Headers...)
+	width := q.Code.Bounds().Dx()
+	output += fmt.Sprintln(pad(0, whole) + pad(width+2, upper) + pad(0, whole))
+	for i, v := range ar {
+		v = v + pad(width-len(v)-1+2*(width%2), blank)
+		v = pad(0) + pad(0, blank) + v + pad(0)
+		output += fmt.Sprintf("%s", v)
+		if i < len(ar) {
+			output += fmt.Sprintln()
+		}
+	}
+	output += fmt.Sprintln(pad(0, whole) + pad(width+2, lower) + pad(0, whole))
+
+	output += fmt.Sprintln(qrstr(q.Code, false))
+	return output
+}
+
+func (q QRcode) HTML() string {
+	var output = ""
+	for _, h := range q.Headers {
+		output += fmt.Sprintln("<p>" + h + "</p>")
+	}
+	output += fmt.Sprintln(qrstr(q.Code, true))
+	return output
+}
+
+func (q QRcode) Png() []byte {
+	fontBytes, _ := os.ReadFile("Oxygen.ttf")
+	ttf, _ := freetype.ParseFont(fontBytes)
+	// create a new image with white background
+	var pic = text2pic.NewTextPicture(text2pic.Configure{Width: 1000, BgColor: text2pic.ColorWhite})
+	// add the qr code header
+	for _, h := range q.Headers {
+		pic.AddTextLine(h, 8, ttf, text2pic.ColorBlack, text2pic.Padding{0, 0, 0, 0, 0})
+	}
+
+	var buf bytes.Buffer
+	pic.Draw(&buf, text2pic.TypePng)
+	img2, _ := png.Decode(&buf)
+
+	// scale q.Code to 1000px
+	img := imaging.Resize(q.Code, 900, 900, imaging.NearestNeighbor)
+	img = imaging.Paste(imaging.New(1000, 1000+img2.Bounds().Size().Y, text2pic.ColorWhite), img, image.Pt(50, img2.Bounds().Size().Y+50))
+
+	img = imaging.Paste(img, img2, image.Pt(0, 0))
+
+	buf.Reset()
+	png.Encode(&buf, img)
+
+	return buf.Bytes()
 }
