@@ -7,7 +7,6 @@ import (
 	"image/color"
 	"os"
 	"strings"
-	"time"
 )
 
 type utf8r rune
@@ -29,6 +28,9 @@ var bw = []color.Color{color.Black, color.White, color.White, color.White}
 var bwp = color.Palette(bw)
 
 func pad(n int, r ...rune) string {
+	if n <= 1 {
+		n += 1
+	}
 	if len(r) == 0 {
 		return strings.Repeat(utf8r(whole).String(false), n)
 	}
@@ -69,35 +71,62 @@ func qrstr(img image.Image, html bool) string {
 	} else {
 		b = strings.ReplaceAll(b, "\n", pad(1)+"\n"+pad(1))
 		b = strings.TrimPrefix(b, pad(1)+"\n") + pad(1)
-		b = pad(img.Bounds().Dx()+2, lower) + "\n" + pad(1) + b
+		b = pad(0) + pad(img.Bounds().Dx()+2, whole) + pad(0) + "\n" + pad(1) + b + "\n"
+		b += pad(img.Bounds().Dx()+4, whole)
 	}
 	return b
 }
 
-func wrap(s string, w int) string {
-	var b string = ""
-	var i int = 0
-	for i = 0; i < len(s); i++ {
-		if i%w == 0 {
-			b += "\n"
+func wrap(s string, w int) []string {
+	s = strings.Join(strings.Split(s, " "), "\n")
+	var b = strings.Split(s, "\n")
+	var line = ""
+	var lines []string
+	for i, v := range b {
+		if len(v) > w {
+			lines = append(lines, v[:w-1], v[w-1:])
+			continue
 		}
-		b += string(s[i])
+		if len(line)+len(v) < w {
+			line += v + " "
+		}
+		if len(line)+len(v) >= w {
+			lines = append(lines, strings.TrimSuffix(line, " "))
+			line = ""
+		}
+		if i == len(b)-1 {
+			lines = append(lines, strings.TrimSuffix(line, " "))
+		}
 	}
-	return b
+	return lines
+}
+
+func encodeqr(s string, header bool, html bool) (string, error) {
+	bar, err := qr.Encode(s, qr.L, qr.Auto)
+	if err != nil {
+		return "", err
+	}
+	var output = ""
+	if header && !html {
+		width := bar.Bounds().Dx()
+		ar := wrap(s, width)
+		output += fmt.Sprintln(pad(0, whole) + pad(width+2, upper) + pad(0, whole))
+		for i, v := range ar {
+			v = pad((((width)-len(v)-1*2*(1-width%2))/2)-(width%2), blank) + v + pad((width-len(v)+2+2*(width%2))/2, blank)
+			v = pad(0) + pad(0, blank) + v + pad(0)
+			output += fmt.Sprintf("%s", v)
+			if i < len(ar) {
+				output += fmt.Sprintln()
+			}
+		}
+		output += fmt.Sprintln(pad(0, whole) + pad(width+2, lower) + pad(0, whole))
+	} else if header && html {
+		output += fmt.Sprintf("<p>%s</p>", s)
+	}
+	output += fmt.Sprintln(qrstr(bar, html))
+	return output, nil
 }
 
 func main() {
-	s := time.Now().String()
-	for _, v := range os.Args[1:] {
-		s += " " + v
-	}
-
-	bar, err := qr.Encode(s, qr.L, qr.Auto)
-	if err != nil {
-		panic(err)
-	}
-	width := bar.Bounds().Size().X
-	// soft wrap at width if possible or hard wrap at width
-	fmt.Println(qrstr(bar, false))
-	fmt.Println(wrap(s, width))
+	fmt.Println(encodeqr(strings.Join(os.Args[1:], " "), true, false))
 }
