@@ -1,21 +1,20 @@
 package goauth
 
-/*
-import (
-	"crypto/subtle"
-	"net/http"
-)
+import "net/http"
 
-func HttpAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		inputUser, inputPass, authOK := r.BasicAuth()
-		CheckPassword(inputUser, inputPass)
-		if !authOK || !lookupOK ||  {
-			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
-			http.Error(w, "Unauthorized.", http.StatusUnauthorized)
+func HttpGen(r *http.Request, w http.ResponseWriter) {
+	if r.Method == "POST" {
+		r.ParseForm()
+		user, qr, err := NewUser(r.Form.Get("username"))
+		if err != nil {
+			http.Error(w, "error: "+err.Error(), 500)
 			return
 		}
-		next.ServeHTTP(w, r)
-	})
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte("<h1>Success!</h1>"))
+		w.Write([]byte("<p>QR Code:</p>"))
+		w.Write([]byte(qr.HTML()))
+		w.Write([]byte("<a href='/validate'>validate</a>"))
+	}
+
 }
-*/
