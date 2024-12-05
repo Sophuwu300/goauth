@@ -15,6 +15,8 @@ func HttpGen(r *http.Request, w http.ResponseWriter) {
 		w.Write([]byte("<p>QR Code:</p>"))
 		w.Write([]byte(qr.HTML()))
 		w.Write([]byte("<a href='/validate'>validate</a>"))
+	} else if r.Method == "GET" {
+
 	}
 
 }

@@ -20,6 +20,16 @@ func init() {
 	}
 }
 
+// getSecurityLevel returns the number of digits and seconds allowed for a security level
+func getSecurityLevel(i int) (otp.Digits, uint, uint, error) {
+	if i > 4 || i < 0 {
+		return 0, 0, 0, Error("invalid security level")
+	}
+	u := (securityLevel & (255 << (8 * uint64(i)))) >> (8 * uint64(i))
+	x := uint(u & 0b11)
+	return otp.Digits(u >> 2), (x*x*25)/10 + (225*x)/10 + 5, x, nil
+}
+
 // OTP holds the information for the otp
 type OTP struct {
 	Secret string
@@ -30,26 +40,37 @@ type OTP struct {
 var Users map[string]OTP
 
 // NewUser creates a new user
-func NewUser(name string, SecurityLevel ...int) (QRcode, error) {
+func NewUser(name string, securityLevel ...int) (QRcode, error) {
 	if _, ok := Users[name]; ok {
 		return QRcode{}, fmt.Errorf("user %s already exists", name)
 	}
-	seclvl := SecurityLevelDefault
-	if len(SecurityLevel) > 0 {
-		seclvl = SecurityLevel[0]
-	}
-	userOtp, e := totp.Generate(totp.GenerateOpts{
-		Issuer:      ServiceHost,
-		AccountName: name,
-		Digits:      otp.Digits(seclvl >> 8),
-	})
 
+	if len(securityLevel) == 0 {
+		securityLevel = []int{SecurityLevelDefault}
+	}
+
+	digits, period, skew, e := getSecurityLevel(securityLevel[0])
 	if e != nil {
 		return QRcode{}, e
 	}
+
+	userOtp, e := totp.Generate(totp.GenerateOpts{
+		Issuer:      ServiceHost,
+		AccountName: name,
+		Digits:      digits,
+		Period:      period,
+	})
+	if e != nil {
+		return QRcode{}, e
+	}
+
 	Users[name] = OTP{
 		Secret: userOtp.Secret(),
-		URL:    userOtp.URL(),
+		Vals: totp.ValidateOpts{
+			Period: period,
+			Digits: digits,
+			Skew:   skew,
+		},
 	}
 
 	q, e := GenQR(userOtp.URL(),

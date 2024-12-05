@@ -39,17 +39,6 @@ const SecurityLevelRealTime = 4
 // ease of use and security
 const securityLevel = uint64(uint64((15<<2)|0b00)<<(8*4) | uint64((12<<2)|0b01)<<(8*3) | uint64((10<<2)|0b10)<<(8*2) | uint64((6<<2)|0b01)<<8 | uint64((6<<2)|0b10))
 
-// getSecurityLevel returns the number of digits and seconds allowed for a security level
-func getSecurityLevel(i int) (int, int, error) {
-
-	if i > 4 || i < 0 {
-		return 0, 0, Error("invalid security level")
-	}
-	u := (securityLevel & (255 << (8 * uint64(i)))) >> (8 * uint64(i))
-	x := int(u & 0b11)
-	return int(u >> 2), (x*x*25)/10 + (225*x)/10 + 5, nil
-}
-
 func Error(text string) error {
 	return &errorString{text}
 }
