@@ -3,7 +3,6 @@ package htsesh
 import (
 	"crypto/rand"
 	"crypto/sha512"
-	"encoding/base32"
 	"encoding/base64"
 	"net/http"
 	"sync/atomic"
@@ -22,7 +21,12 @@ func (s *session) Hash() string {
 	return base64.URLEncoding.EncodeToString(h.Sum(nil))
 }
 
-func (s *session) Validate(cookie *http.Cookie) bool {
+func sessionOK(r *http.Request) bool {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		return false
+	}
+	s := sessionID.Load()
 	if s == nil {
 		return false
 	}
@@ -38,43 +42,10 @@ func (s *session) Validate(cookie *http.Cookie) bool {
 	return true
 }
 
-func sessionOK(r *http.Request) bool {
-	cookie, err := r.Cookie("session_id")
-	if err != nil {
-		return false
-	}
-	return sessionID.Load().Validate(cookie)
-}
-
-func Logout(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/logout" {
-		ji := base32.StdEncoding.EncodeToString(sessionID.Load().V[:5])
-		if r.URL.Query().Get("logoutid") == ji {
-			sessionID.Store(nil)
-			http.SetCookie(w, &http.Cookie{
-				Name:     "session_id",
-				Value:    "",
-				HttpOnly: true,
-				Secure:   true,
-				Expires:  time.Now(),
-				SameSite: http.SameSiteStrictMode,
-			})
-			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
-		} else {
-			w.Header().Set("Content-Type", "text/html")
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("<html><body><a href='?logout&logoutid=" + ji + "'>Logout</a></body></html>"))
-		}
-		return
-	}
-}
-
 func Authenticate(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if sessionOK(r) {
+		if sessionOK(r) || loginHandler(w, r) {
 			next.ServeHTTP(w, r)
-		} else if loginHandler(w, r) {
-			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
 		} else {
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusUnauthorized)
@@ -104,7 +75,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) bool {
 	if err != nil || 32 != len(s.V) || n != 32 {
 		return false
 	}
-	sessionID.Store(&s)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_id",
 		Value:    s.Hash(),
@@ -113,6 +83,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) bool {
 		Expires:  s.T,
 		SameSite: http.SameSiteStrictMode,
 	})
+	sessionID.Store(&s)
 	return true
 }
 
@@ -133,3 +104,4 @@ var FORM = `<html><body><form method="post" style="width: min-content;height: mi
 <input type="text" autocomplete="off" placeholder="otp" name="otp">
 <input type="submit" value="submit">
 </form></body></html>`
+
