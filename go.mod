@@ -1,4 +1,4 @@
-module sophuwu.site/goauth
+module git.sophuwu.com/goauth
 
 go 1.22.3
 
