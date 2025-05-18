@@ -51,7 +51,7 @@ func Authenticate(next http.HandlerFunc) http.Handler {
 		if sessionOK(r) {
 			if r.URL.Query().Has("logout") {
 				ji := base32.StdEncoding.EncodeToString(sessionID.Load().V[:5])
-				if r.URL.Query().Get("id") == ji {
+				if r.URL.Query().Get("logoutid") == ji {
 					sessionID.Store(nil)
 					http.SetCookie(w, &http.Cookie{
 						Name:     "session_id",
@@ -65,7 +65,7 @@ func Authenticate(next http.HandlerFunc) http.Handler {
 				} else {
 					w.Header().Set("Content-Type", "text/html")
 					w.WriteHeader(http.StatusUnauthorized)
-					w.Write([]byte("<html><body><a href='?logout&id=" + ji + "'>Logout</a></body></html>"))
+					w.Write([]byte("<html><body><a href='?logout&logoutid=" + ji + "'>Logout</a></body></html>"))
 				}
 				return
 			}
