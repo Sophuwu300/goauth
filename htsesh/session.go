@@ -46,29 +46,32 @@ func sessionOK(r *http.Request) bool {
 	return sessionID.Load().Validate(cookie)
 }
 
+func Logout(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/logout" {
+		ji := base32.StdEncoding.EncodeToString(sessionID.Load().V[:5])
+		if r.URL.Query().Get("logoutid") == ji {
+			sessionID.Store(nil)
+			http.SetCookie(w, &http.Cookie{
+				Name:     "session_id",
+				Value:    "",
+				HttpOnly: true,
+				Secure:   true,
+				Expires:  time.Now(),
+				SameSite: http.SameSiteStrictMode,
+			})
+			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
+		} else {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("<html><body><a href='?logout&logoutid=" + ji + "'>Logout</a></body></html>"))
+		}
+		return
+	}
+}
+
 func Authenticate(next http.HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if sessionOK(r) {
-			if r.URL.Query().Has("logout") {
-				ji := base32.StdEncoding.EncodeToString(sessionID.Load().V[:5])
-				if r.URL.Query().Get("logoutid") == ji {
-					sessionID.Store(nil)
-					http.SetCookie(w, &http.Cookie{
-						Name:     "session_id",
-						Value:    "",
-						HttpOnly: true,
-						Secure:   true,
-						Expires:  time.Now(),
-						SameSite: http.SameSiteStrictMode,
-					})
-					http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
-				} else {
-					w.Header().Set("Content-Type", "text/html")
-					w.WriteHeader(http.StatusUnauthorized)
-					w.Write([]byte("<html><body><a href='?logout&logoutid=" + ji + "'>Logout</a></body></html>"))
-				}
-				return
-			}
 			next.ServeHTTP(w, r)
 		} else if loginHandler(w, r) {
 			http.Redirect(w, r, r.URL.Path, http.StatusSeeOther)
